@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physician Job Search Tool</title>
+    <meta name="description" content="Find employer-direct job listings tailored to physicians.">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        /* General Styles */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            background-color: #f0f4f8;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            background: white;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .logo {
+            width: 120px;
+            height: auto;
+            margin-right: 10px;
+        }
+        .company-name {
+            font-size: 26px;
+            color: #2c3e50;
+        }
+        .title {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            animation: fadeIn 0.5s ease;
+        }
+        .input-field, .select-field {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .search-button, .clear-button, .export-button {
+            width: 48%;
+            padding: 10px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .search-button:hover, .export-button:hover {
+            background-color: #2980b9;
+        }
+        .results, .history {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background: #e7f3fe;
+        }
+        .map {
+            height: 300px; 
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+        .guide-title {
+            margin-top: 30px;
+            color: #2c3e50;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://placehold.co/200x60?text=Curare+Logo" alt="Curare Logo" class="logo">
+            <h1 class="company-name">Physician Recruiting</h1>
+        </div>
+        <h2 class="title">On-Demand Job Search Tool</h2>
+        <form id="searchForm" class="search-form">
+            <select id="specialty" class="select-field" required>
+                <option value="">Select Specialty</option>
+                <option value="Orthopedic Surgeon">Orthopedic Surgeon</option>
+                <option value="Cardiologist">Cardiologist</option>
+                <option value="Neurosurgeon">Neurosurgeon</option>
+                <option value="Pediatrician">Pediatrician</option>
+                <option value="Anesthesiologist">Anesthesiologist</option>
+            </select>
+            <select id="subspecialty" class="select-field">
+                <option value="">Select Subspecialty (optional)</option>
+                <option value="Sports Medicine">Sports Medicine</option>
+                <option value="Interventional Cardiology">Interventional Cardiology</option>
+                <option value="Pediatric Cardiology">Pediatric Cardiology</option>
+                <option value="Neurosurgical Oncology">Neurosurgical Oncology</option>
+            </select>
+            <input type="text" id="location" placeholder="Location (City, State, or Zip Code)" required class="input-field">
+            <select id="radius" class="select-field">
+                <option value="25">25 miles</option>
+                <option value="50">50 miles</option>
+                <option value="100">100 miles</option>
+                <option value="150">150 miles</option>
+            </select>
+            <button type="submit" class="search-button">Search</button>
+            <button type="button" id="clearHistory" class="clear-button">Clear History</button>
+        </form>
+        <div id="results" class="results"></div>
+        <div id="history" class="history"></div>
+        <button id="exportBtn" class="export-button">Export Results as CSV</button>
+        <div id="map" class="map"></div>
+        
+        <h2 class="guide-title">User Guide</h2>
+        <p>1. Select the physician specialty you are searching for.</p>
+        <p>2. Select a subspecialty (optional).</p>
+        <p>3. Specify the location (city, state, or zip code) for your search.</p>
+        <p>4. Choose the search radius within which to find results.</p>
+        <p>5. Click on "Search" to view results and a map of locations.</p>
+        <p>6. Use "Clear History" to remove past searches.</p>
+        <p>7. Export your search results as a CSV file using the "Export Results as CSV" button.</p>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        let searchHistory = [];
+
+        document.getElementById('searchForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const specialty = document.getElementById('specialty').value;
+            const subspecialty = document.getElementById('subspecialty').value;
+            const location = document.getElementById('location').value;
+            const radius = document.getElementById('radius').value;
+
+            saveSearchHistory(specialty, location, radius);
+        });
+
+        document.getElementById('clearHistory').addEventListener('click', function() {
+            searchHistory = [];
+            document.getElementById('history').innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+        });
+
+        document.getElementById('exportBtn').addEventListener('click', function() {
+            const csvContent = "data:text/csv;charset=utf-8," + searchHistory.map(e => `${e.specialty},${e.location},${e.radius}`).join("\n");
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "search_history.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        function saveSearchHistory(specialty, location, radius) {
+            searchHistory.push({ specialty, location, radius });
+            const historyDiv = document.getElementById('history');
+            historyDiv.innerHTML += `<div>Last searched: ${specialty} in ${location} (${radius} miles)</div>`;
+        }
+    </script>
+</body>
+</html>hi
